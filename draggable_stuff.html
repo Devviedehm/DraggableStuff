@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<head>
+<style>
+body {
+	background: #000;
+	color:      #fff;
+	margin:     0px;
+}
+.holder {
+	position:       absolute;
+	left:                0px;
+	top:                 0px;
+	pointer-events:     none;
+}
+.square { background: #ff0f; pointer-events: auto; border: solid #c90f; box-sizing: border-box; }
+.map    { background: #393f; pointer-events: auto; border: solid #7d2f; box-sizing: border-box; }
+.hollow { background: #0000; pointer-events: none; }
+.holder div {
+	display: block;
+	  width:  32px;
+	 height:  32px;
+	 margin:   0px;
+	padding:   0px;
+	  float:  left;
+}
+.overlay_div {
+	       position:               fixed;
+	           left:                  0%;
+	            top:                  0%;
+	          width:    calc(100% - 6em);
+	         height:    calc(100% - 6em);
+	         border: 2em solid #1e1e1ecc;
+	        padding:                 1em;
+	       overflow:                auto;
+	     background:   rgb( 30, 30, 30 );
+	background-clip:         padding-box;
+}
+.overlay_div th {       width:     10em; }
+.overlay_div td { white-space: pre-wrap; }
+.create_shape_checkbox {
+	appearance: none;
+	    margin:  2px;
+	background: #111;
+	     width: 32px;
+	    height: 32px;
+}
+.create_shape_checkbox:checked { background: #0c0; }
+.shape_row { line-height: 0px; }
+</style>
+<script type="application/javascript">
+var dragging     = { x: 0, y: 0 };
+var curr_holder  =           null;
+var curr_overlay =           null;
+var num_blocks   =              0;
+const border_px  =              4;
+
+function new_2d_array( w = 1, h = 1 ){
+	return Array.from( new Array( w ), _ => new Array( h ) );
+	/*
+	vs
+	var ret_arr = new Array( w );
+	for( var i = w; i--; )
+		ret_arr[ i ] = new Array( h );
+	return ret_arr;
+	*/
+}
+
+function new_block( lines, start_x = 0, start_y = 0, className = "square" ){
+	var holder = document.createElement( "div" );
+	holder.rotation        = 0;
+	holder.className       = "holder";
+	holder.style.left      = start_x + "px";
+	holder.style.top       = start_y + "px";
+	holder.style.transform = "rotate( 0deg )";
+	holder.addEventListener( "mousedown", e => {
+		// e ||= window.event;
+		if( e.button !== 0 )
+			return;
+		e.preventDefault();
+		dragging.x = e.clientX;
+		dragging.y = e.clientY;
+		function holder_move( e ){
+			holder.style.left = holder.offsetLeft + e.clientX - dragging.x + "px";
+			holder.style.top  = holder.offsetTop  + e.clientY - dragging.y + "px";
+			dragging.x        = e.clientX;
+			dragging.y        = e.clientY;
+		}
+		function holder_release( e ){
+			if( e.button !== 0 )
+				return;
+			document.removeEventListener( "mousemove", holder_move );
+			document.removeEventListener( "mouseup", holder_release );
+			if( document.getElementById( "snap_to_grid" ).checked ){
+				var { x, y } = curr_holder.getBoundingClientRect();
+				var delta_x = curr_holder.offsetLeft - x;
+				var delta_y = curr_holder.offsetTop  - y;
+				curr_holder.style.left = Math.round( ( curr_holder.offsetLeft - delta_x ) / 32 ) * 32 + delta_x + "px";
+				curr_holder.style.top  = Math.round( ( curr_holder.offsetTop  - delta_y ) / 32 ) * 32 + delta_y + "px";
+			}
+			curr_holder = null;
+		}
+		document.addEventListener( "mousemove", holder_move );
+		document.addEventListener( "mouseup", holder_release );
+		curr_holder = holder;
+	} );
+	for( var yy = 0; yy < lines.length; yy++ ){
+		var line = lines[ yy ];
+		for( var xx = 0; xx < line.length; xx++ ){
+			var block = line[ xx ];
+			var square = document.createElement( "div" );
+			if( block === 1 ){
+				square.className = className;
+				var borders = [ 0, 0, 0, 0 ];
+				// top right bottom left
+				if( yy === 0                || lines[ yy - 1 ][ xx ] === 0 ) borders[ 0 ] = border_px;
+				if( xx === line .length - 1 || line [ xx + 1 ]       === 0 ) borders[ 1 ] = border_px;
+				if( yy === lines.length - 1 || lines[ yy + 1 ][ xx ] === 0 ) borders[ 2 ] = border_px;
+				if( xx === 0                || line [ xx - 1 ]       === 0 ) borders[ 3 ] = border_px;
+				square.style.borderWidth = borders.join( "px " ) + "px";
+			} else {
+				square.className = "hollow";
+			}
+			holder.appendChild( square );
+		}
+		holder.appendChild( document.createElement( "br" ) );
+	}
+	document.body.appendChild( holder );
+}
+document.addEventListener( "contextmenu", e => {
+	if( curr_holder === null )
+		return;
+	e.preventDefault();
+	curr_holder.rotation        = ( curr_holder.rotation + 90 ) % 360;
+	curr_holder.style.transform = "rotate( " + curr_holder.rotation + "deg )";
+	return false;
+} );
+/*window.addEventListener( "load", e => {
+	new_block( [ [ 1, 1    ], [ 0, 1    ] ],  10, 20 );
+	new_block( [ [ 1, 1, 1 ], [ 0, 1, 0 ] ], 200, 10 );
+} );*/
+
+class Overlay {
+	elem;
+	data;
+	constructor( title ){
+		this.elem = document.createElement( "div" );
+		this.elem.className = "overlay_div";
+		// this.elem.style.zIndex = "1";
+		this.data = `<h1 style="text-align:center;">${title}</h1><input type="submit" style="width:3em;height:3em;position:fixed;top:0%;right:0%;background:#777;border-radius:5em;cursor:pointer;font-size:2em;" value="&#10060;"/>`;
+		curr_overlay = this;
+	}
+	add_data( data ){
+		this.data += data;
+	}
+	show(){
+		this.elem.innerHTML = this.data;
+		var btn = this.elem.getElementsByTagName( "input" )[ 0 ];
+		btn.addEventListener( "click", e => this.destroy() );
+		document.body.appendChild( this.elem );
+		document.body.style.overflow = "hidden";
+	}
+	destroy(){
+		document.body.removeChild( this.elem );
+		document.body.style.overflow = "auto";
+		curr_overlay = null;
+	}
+}
+
+function new_shape_overlay(){
+	var oo = new Overlay( "New Shape" );
+	// oo.shape_data = [ 0 ];
+	oo.resize = _ => {
+		var ww = parseInt( document.getElementById( "data_w" ).value ) || 1;
+		var hh = parseInt( document.getElementById( "data_h" ).value ) || 1;
+		// oo.shape_data = new_2d_array( ww, hh );
+		var shape_map = document.getElementById( "shape_map" );
+		shape_map.innerHTML = `<div class="shape_row">` + new Array( hh + 1 ).join( new Array( ww + 1 ).join( `<input type="checkbox" class="create_shape_checkbox" checked/>` ) + `</div><div class="shape_row">` ) + `</div>`;
+	};
+	oo.create = _ => {
+		var shape_map = document.getElementById( "shape_map" );
+		var ww = parseInt( document.getElementById( "data_w" ).value ) || 1;
+		var hh = parseInt( document.getElementById( "data_h" ).value ) || 1;
+		var shape_data = new_2d_array( hh, ww );
+		for( var yy = hh; yy--; )
+			for( var xx = ww; xx--; )
+				shape_data[ yy ][ xx ] = shape_map.getElementsByClassName( "create_shape_checkbox" )[ xx + yy * ww ].checked ? 1 : 0;
+		num_blocks++;
+		new_block( shape_data, ( num_blocks * 10 ) % window.innerWidth, Math.floor( num_blocks * 10 / window.innerHeight ) * 10 + 10, num_blocks === 1 ? "map" : "square" );
+	};
+	oo.add_data( `
+		<label for="data_w" style="width:8em;">Width: <input id="data_w" type="number" value="1" min="1" onchange="curr_overlay.resize()" style="width:4em;"/></label><br/>
+		<label for="data_h" style="width:8em;">Height: <input id="data_h" type="number" value="1" min="1" onchange="curr_overlay.resize()" style="width:4em;"/></label><br/>
+		<input type="submit" value="Create" onclick="curr_overlay.create()"/><br/><br/>
+		<div id="shape_map">
+			<div class="shape_row">
+				<input type="checkbox" class="create_shape_checkbox" checked/>
+			</div>
+		</div>
+	` );
+	oo.show();
+}
+</script>
+</head>
+<body>
+	<div class="ui_fixed" style="position:fixed;left:0px;top:0px;">
+		<input type="submit" value="New Shape" onclick="new_shape_overlay()"/><br/>
+		<label for="snap_to_grid">Snap to grid: <input type="checkbox" id="snap_to_grid"/></label>
+	</div>
+</body>
